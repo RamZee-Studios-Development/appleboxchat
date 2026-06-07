@@ -2128,6 +2128,13 @@ Applebox Version: V1.0.0</pre>
     const originalTitle = document.title;
     const faviconElement = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
     const originalFaviconHref = faviconElement ? faviconElement.href : '/favicon.ico';
+    const isShutdownSoundMuted = {{ users[current_user.id].get('mute_ringtone', True)|tojson }};
+    const shutdownAlarmUrl = 'https://www.soundjay.com/misc/sounds/nuclear-alarm-01.mp3';
+    const shutdownAlarm = new Audio(shutdownAlarmUrl);
+    shutdownAlarm.preload = 'auto';
+    shutdownAlarm.loop = true;
+    let shutdownTimer = null;
+    let shutdownCountdown = null;
 
     window.addEventListener('blur', () => {
         document.title = 'Home - Classroom';
@@ -2293,26 +2300,103 @@ Applebox Version: V1.0.0</pre>
         window.location.href = '/admin/export_database';
     }
 
+    const purgeConfirmationSteps = [
+        {
+            header: '<i class="fas fa-exclamation-triangle" style="color: var(--danger-color);"></i> DANGER: Purge Database',
+            body: `Are you absolutely sure you want to <strong>PURGE</strong> the entire database? This will delete all chat history, logs, friend lists, and user accounts (except yours). <br><br><strong>Recommendation:</strong> Export a backup first. <strong>This cannot be undone.</strong>`
+        },
+        {
+            header: 'WAIT A SECOND',
+            body: `This is your second confirmation. The database is already sweating. Do you really want to make it disappear like a bad first date?`
+        },
+        {
+            header: 'ARE YOU REALLY SURE?',
+            body: `This is the third prompt. If the database had feelings, it would be crying into its SQL queries right now.`
+        },
+        {
+            header: 'THE PURGE FAIRY IS PREPARING',
+            body: `The purge fairy has its broom out. Only press continue if you are ready for a tidy apocalypse.`
+        },
+        {
+            header: 'THIS IS A SERIOUS QUESTION',
+            body: `Do you want to delete literally everything? Even the vague memory of that one embarrassing message?`
+        },
+        {
+            header: 'NO TURNING BACK',
+            body: `This is the point of no return. If you continue, the chat ghosts will haunt the UI forever.`
+        },
+        {
+            header: 'ARE YOU DOOMSDAY READY?',
+            body: `You have triggered the ultimate reset. Your browser is probably whispering "don't do it" right now.`
+        },
+        {
+            header: 'SERIOUSLY, THIS IS IT',
+            body: `The server has already packed its bags. Pressing continue now is like deleting your own diary.`
+        },
+        {
+            header: 'THE SERVER WHISPERS',
+            body: `It says: "Please don’t". But you can still ignore it. Brave or reckless?`
+        },
+        {
+            header: 'CONFIRMATION LEVEL 10',
+            body: `This is confirmation number ten. At this point, the universe is waiting for your answer.`
+        },
+        {
+            header: 'ALMOST DONE',
+            body: `One more funny warning: This purge will make all your database friends disappear in a puff of digital smoke.`
+        },
+        {
+            header: 'THE DATABASE HAS A WILL',
+            body: `If the database could sign a waiver, it would probably refuse. You still want to proceed?`
+        },
+        {
+            header: 'HAVE YOU BACKED UP YET?',
+            body: `This is your 13th check. There is no undo. The backup button looks very lonely right now.`
+        },
+        {
+            header: 'ARE YOU SURE THIS ISN’T A PRANK?',
+            body: `This is the second-to-last prompt. The system is suspicious, and so am I.`
+        },
+        {
+            header: 'FINAL WARNING',
+            body: `This is the last confirmation. Pressing continue will make the purge official. The mice have already left the server.`
+        }
+    ];
+
     function confirmPurge() {
+        showPurgeConfirmStep(0);
+    }
+
+    function showPurgeConfirmStep(stepIndex) {
+        const step = purgeConfirmationSteps[stepIndex];
         const modal = document.createElement('div');
         modal.className = 'confirm-modal';
         modal.innerHTML = `
             <div class="confirm-modal-content">
                 <div class="confirm-modal-header">
-                    <i class="fas fa-exclamation-triangle" style="color: var(--danger-color);"></i> DANGER: Purge Database
+                    ${step.header}
                 </div>
                 <div class="confirm-modal-body">
-                    Are you absolutely sure you want to <strong>PURGE</strong> the entire database? This will delete all chat history, logs, friend lists, and user accounts (except yours). 
-                    <br><br><strong>Recommendation:</strong> Export a backup first. <strong>This cannot be undone.</strong>
+                    ${step.body}
                 </div>
                 <div class="confirm-modal-actions">
                     <button class="modal-btn modal-btn-secondary" onclick="closeConfirmModal(this)">Cancel</button>
-                    <button class="modal-btn modal-btn-danger" onclick="executePurge(this)">Purge Database</button>
+                    <button class="modal-btn modal-btn-danger" onclick="handlePurgeConfirmAction(this, ${stepIndex})">${stepIndex === purgeConfirmationSteps.length - 1 ? 'Purge Database' : 'Yes, continue'}</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
         setTimeout(() => modal.classList.add('active'), 10);
+    }
+
+    function handlePurgeConfirmAction(button, stepIndex) {
+        const modal = button.closest('.confirm-modal');
+        if (stepIndex === purgeConfirmationSteps.length - 1) {
+            executePurge(button);
+            return;
+        }
+        closeConfirmModal(button);
+        setTimeout(() => showPurgeConfirmStep(stepIndex + 1), 310);
     }
 
     async function executePurge(button) {
@@ -2728,6 +2812,16 @@ Applebox Version: V1.0.0</pre>
         }
     }
 
+    function stopShutdownSequence() {
+        if (shutdownTimer) {
+            clearInterval(shutdownTimer);
+            shutdownTimer = null;
+        }
+        shutdownCountdown = null;
+        shutdownAlarm.pause();
+        shutdownAlarm.currentTime = 0;
+    }
+
     function confirmShutdown() {
         const modal = document.createElement('div');
         modal.className = 'confirm-modal';
@@ -2740,7 +2834,7 @@ Applebox Version: V1.0.0</pre>
                     Are you absolutely sure you want to <strong>SHUT DOWN</strong> the server? This will kick everyone off and stop the application immediately.
                 </div>
                 <div class="confirm-modal-actions">
-                    <button class="modal-btn modal-btn-secondary" onclick="closeConfirmModal(this)">Cancel</button>
+                    <button class="modal-btn modal-btn-secondary" onclick="closeConfirmModal(this); stopShutdownSequence();">Cancel</button>
                     <button class="modal-btn modal-btn-danger" onclick="executeShutdown(this)">Shutdown Server</button>
                 </div>
             </div>
@@ -2749,17 +2843,49 @@ Applebox Version: V1.0.0</pre>
         setTimeout(() => modal.classList.add('active'), 10);
     }
 
-    async function executeShutdown(button) {
-        try {
-            const response = await fetch('/admin/shutdown', { method: 'POST' });
-            const data = await response.json();
-            closeConfirmModal(button);
-            showToast(data.message, 'warning', 'Server Shutdown');
-            setTimeout(() => window.location.reload(), 2000);
-        } catch (error) {
-            closeConfirmModal(button);
-            showToast('Failed to shutdown server', 'error', 'Error');
+    function executeShutdown(button) {
+        const modal = button.closest('.confirm-modal');
+        if (!modal) return;
+
+        shutdownCountdown = 10;
+        const body = modal.querySelector('.confirm-modal-body');
+        const actions = modal.querySelector('.confirm-modal-actions');
+
+        body.innerHTML = `
+            The server will shut down in <strong id="shutdown-countdown">${shutdownCountdown}</strong> seconds.
+            ${isShutdownSoundMuted ? '<br><em>Sound is muted in your settings.</em>' : ''}
+        `;
+        actions.innerHTML = `
+            <button class="modal-btn modal-btn-secondary" onclick="closeConfirmModal(this); stopShutdownSequence();">Cancel</button>
+        `;
+
+        if (!isShutdownSoundMuted) {
+            shutdownAlarm.play().catch(() => {
+                console.warn('Shutdown alarm could not play.');
+            });
         }
+
+        shutdownTimer = setInterval(async () => {
+            shutdownCountdown -= 1;
+            const countdownElement = document.getElementById('shutdown-countdown');
+            if (countdownElement) {
+                countdownElement.textContent = shutdownCountdown;
+            }
+            if (shutdownCountdown <= 0) {
+                stopShutdownSequence();
+                body.innerHTML = '<strong>Shutting down now...</strong>';
+                try {
+                    const response = await fetch('/admin/shutdown', { method: 'POST' });
+                    const data = await response.json();
+                    closeConfirmModal(modal.querySelector('.modal-btn-secondary'));
+                    showToast(data.message, 'warning', 'Server Shutdown');
+                    setTimeout(() => window.location.reload(), 2000);
+                } catch (error) {
+                    closeConfirmModal(modal.querySelector('.modal-btn-secondary'));
+                    showToast('Failed to shutdown server', 'error', 'Error');
+                }
+            }
+        }, 1000);
     }
 
     async function refreshTerminal() {

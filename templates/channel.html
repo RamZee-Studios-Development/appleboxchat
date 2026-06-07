@@ -1566,10 +1566,17 @@
         <div class="sidebar-title" style="margin-left: 4px; margin-bottom: 8px;">Channels</div>
         {% for chan in server.channels %}
         {% set chan_id = room.split(':')[0] + ':' + chan %}
-        {% set is_voice = server.channel_metadata and server.channel_metadata.get(chan, {}).get('type') == 'voice' %}
+        {% set chan_type = server.channel_metadata and server.channel_metadata.get(chan, {}).get('type') %}
         <a href="{{ url_for('channel', room_id=chan_id) }}" class="channel-nav-item {% if room == chan_id %}active{% endif %}"
            oncontextmenu="handleChannelContextMenu(event, '{{ room.split(':')[0] }}', '{{ chan }}')">
-            <i class="fas fa-{% if is_voice %}volume-up{% else %}hashtag{% endif %}"></i> {{ chan }}
+            {% if chan_type == 'voice' %}
+                <i class="fas fa-volume-up"></i>
+            {% elif chan_type == 'forum' %}
+                <i class="fas fa-comments"></i>
+            {% else %}
+                <i class="fas fa-hashtag"></i>
+            {% endif %}
+            {{ chan }}
         </a>
         {% if is_voice %}
         <div class="voice-participants" id="voice-participants-{{ chan }}">

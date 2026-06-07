@@ -556,6 +556,7 @@ def update_banner():
     return redirect(url_for('home'))
 
 users = load_users()
+
 messages = []
 ROLES = ['Owner', 'Admin', 'Mod', 'Regular User', 'Co-owner', 'Developer']
 
@@ -1059,7 +1060,6 @@ def create_server_api():
     }
     save_servers(servers_data)
     return jsonify({'success': True, 'server_id': server_id})
-
 @app.route('/api/server/<server_id>/invite', methods=['POST'])
 @login_required
 def invite_to_server_api(server_id):
@@ -1081,6 +1081,8 @@ def create_server_channel_api(server_id):
         return jsonify({'error': 'Denied'}), 403
     chan_name = request.json.get('name', '').strip().lower()
     chan_type = request.json.get('type', 'text')
+    if chan_type not in ['text', 'voice', 'forum']:
+        return jsonify({'error': 'Invalid channel type'}), 400
     chan_name = re.sub(r'[^a-z0-9_-]', '', chan_name)
     if not chan_name: return jsonify({'error': 'Invalid name'}), 400
     if chan_name not in servers_data[server_id]['channels']:
@@ -1399,6 +1401,194 @@ EMOJIS = {
     'star': '⭐',
     'check': '✅'
 }
+# Built-in bots and bot data
+BOTS = {
+    'HelperBot': {
+        'display_name': 'Helper Bot',
+        'role': 'Bot',
+        'bio': 'Ask me for help using /bot ask HelperBot {question}.',
+        'profile_pic': '',
+        'theme': 'default'
+    },
+    'DiceBot': {
+        'display_name': 'Dice Bot',
+        'role': 'Bot',
+        'bio': 'Roll dice with /dice {sides}.',
+        'profile_pic': '',
+        'theme': 'default'
+    },
+    'JokeBot': {
+        'display_name': 'Joke Bot',
+        'role': 'Bot',
+        'bio': 'Ask for a joke with /joke.',
+        'profile_pic': '',
+        'theme': 'default'
+    },
+    'TriviaBot': {
+        'display_name': 'Trivia Bot',
+        'role': 'Bot',
+        'bio': 'Get trivia questions with /trivia.',
+        'profile_pic': '',
+        'theme': 'default'
+    },
+    '8BallBot': {
+        'display_name': '8-Ball Bot',
+        'role': 'Bot',
+        'bio': 'Ask a yes/no question with /8ball {question}.',
+        'profile_pic': '',
+        'theme': 'default'
+    }
+}
+
+BOT_JOKES = [
+    'Why did the computer show up at work late? It had a hard drive.',
+    'Why do programmers prefer dark mode? Because light attracts bugs.',
+    'I would tell you a UDP joke, but you might not get it.',
+    'Why did the web developer walk out of the meeting? Too many cookies.'
+]
+
+BOT_QUOTES = [
+    '“Code is like humor. When you have to explain it, it’s bad.” – Cory House',
+    '“First, solve the problem. Then, write the code.” – John Johnson',
+    '“Simplicity is the soul of efficiency.” – Austin Freeman',
+    '“Programs must be written for people to read, and only incidentally for machines to execute.” – Harold Abelson'
+]
+
+MAGIC_8BALL = [
+    'It is certain.',
+    'Without a doubt.',
+    'Ask again later.',
+    'Cannot predict now.',
+    'Don’t count on it.',
+    'Outlook good.',
+    'Very doubtful.',
+    'Yes – definitely.'
+]
+
+TRIVIA_QUESTIONS = [
+    'What does CSS stand for?',
+    'Which Python keyword is used to define a function?',
+    'In web URLs, what does HTTPS stand for?',
+    'What symbol is used to comment a line in Python?'
+]
+
+
+def initialize_bots():
+    """Ensure built-in bot accounts exist in the users dictionary."""
+    for bot_username, bot_data in BOTS.items():
+        if bot_username not in users:
+            users[bot_username] = {
+                'password': '',
+                'display_name': bot_data['display_name'],
+                'role': bot_data['role'],
+                'profile_pic': bot_data['profile_pic'],
+                'is_suspended': False,
+                'is_muted': False,
+                'bio': bot_data['bio'],
+                'theme': bot_data['theme'],
+                'custom_theme': {},
+                'ringtone_url': '',
+                'mute_ringtone': True,
+                'banner_url': '',
+                'badges': [],
+                'is_stealth': False,
+                'security_question': '',
+                'security_answer': '',
+                'custom_status': '',
+                'created_at': datetime.now(cst_timezone).strftime('%Y-%m-%d %I:%M %p'),
+                'last_online': '',
+                'face_descriptor': '',
+                'profile_bg': '',
+                'is_infected': False
+            }
+
+
+def make_bot_message(bot_username, text, room, whisper_to=None, restricted_visibility=False):
+    return {
+        'text': text,
+        'sender': bot_username,
+        'timestamp': datetime.now(cst_timezone).strftime('%Y-%m-%d %I:%M %p'),
+        'room': room,
+        'whisper_to': whisper_to,
+        'restricted_visibility': restricted_visibility
+    }
+
+
+def get_bot_summary(bot_name):
+    bot_data = BOTS.get(bot_name)
+    if not bot_data:
+        return 'Unknown bot. Use /bot list to see available bots.'
+    return f"{bot_data['display_name']}: {bot_data['bio']}"
+
+
+def find_bot_name(name):
+    normalized = name.lower().replace(' ', '').replace('bot', '')
+    for bot_username in BOTS:
+        if bot_username.lower() == name.lower() or bot_username.lower().replace('bot', '') == normalized:
+            return bot_username
+    return None
+
+
+def handle_bot_command(message, room):
+    parts = message.split()
+    if not parts:
+        return None
+    command = parts[0].lower()
+
+    if command == '/bot':
+        if len(parts) == 1:
+            bot_list = ', '.join([b for b in BOTS])
+            return make_bot_message('HelperBot', f'Available bots: {bot_list}. Use /bot info {{bot}} or /bot ask {{bot}} {{question}}.', room)
+
+        subcommand = parts[1].lower()
+        if subcommand == 'list':
+            bot_list = ', '.join([b for b in BOTS])
+            return make_bot_message('HelperBot', f'Available bots: {bot_list}.', room)
+
+        if subcommand == 'info' and len(parts) > 2:
+            bot_name = find_bot_name(parts[2])
+            if not bot_name:
+                return make_bot_message('HelperBot', f'Bot not found. Use /bot list to see available bots.', room)
+            return make_bot_message(bot_name, get_bot_summary(bot_name), room)
+
+        if subcommand == 'ask' and len(parts) > 2:
+            bot_name = find_bot_name(parts[2])
+            question = ' '.join(parts[3:]) or 'Hello!'
+            if not bot_name:
+                return make_bot_message('HelperBot', f'Bot not found. Use /bot list to see available bots.', room)
+            if bot_name == 'HelperBot':
+                return make_bot_message('HelperBot', f'You asked: {question}. I can help with commands like /dice, /joke, /quote, /8ball, and /trivia.', room)
+            if bot_name == 'DiceBot':
+                return make_bot_message('DiceBot', f'Try /dice {{sides}} to roll a dice. Example: /dice 20', room)
+            return make_bot_message(bot_name, f'You asked: {question} — sorry, I am still learning to answer that directly.', room)
+
+        return make_bot_message('HelperBot', 'Bot usage: /bot list, /bot info {bot}, /bot ask {bot} {question}', room)
+
+    if command == '/dice':
+        sides = 6
+        if len(parts) > 1 and parts[1].isdigit():
+            sides = max(2, min(100, int(parts[1])))
+        value = random.randint(1, sides)
+        return make_bot_message('DiceBot', f'Rolled a {sides}-sided dice and got: {value}', room)
+
+    if command == '/joke':
+        joke = random.choice(BOT_JOKES)
+        return make_bot_message('JokeBot', joke, room)
+
+    if command == '/quote':
+        quote = random.choice(BOT_QUOTES)
+        return make_bot_message('JokeBot', quote, room)
+
+    if command == '/8ball' and len(parts) > 1:
+        answer = random.choice(MAGIC_8BALL)
+        return make_bot_message('8BallBot', f'🎱 {answer}', room)
+
+    if command == '/trivia':
+        question = random.choice(TRIVIA_QUESTIONS)
+        return make_bot_message('TriviaBot', f'Trivia: {question}', room)
+
+    return None
+
 # Function to parse message text, apply profanity filter, replace emoji codes with actual emojis, and format mentions and links. This function is called before saving messages to ensure that all messages are properly formatted and filtered for profanity.
 def parse_message(text):
     # First, apply profanity filter
@@ -1434,6 +1624,11 @@ def handle_command(message, room):
     if not parts: return None
     command = parts[0].lower()
 
+    # Handle bot and fun commands for everyone.
+    bot_response = handle_bot_command(message, room)
+    if bot_response:
+        return bot_response
+
     # Everyone can use /whisper
     if command == '/whisper' and len(parts) > 2:
         target = parts[1].lstrip('@')
@@ -1450,7 +1645,7 @@ def handle_command(message, room):
 
     if command == '/help':
         return {'text': 
-        '/whisper {user} {msg} - Private message, /ban {user}-bans someone /unban {user}-unbans someone /chatclear-clears history /role {user} {role}-updates user /mute {user}-mutes someone /poll create {title} {options...} /help-shows this message, /announce {message}-global announcement, /chess {room}-Invite someone to a chess game',
+        '/whisper {user} {msg} - Private message, /ban {user} - bans someone, /unban {user}, /chatclear, /role {user} {role}, /mute {user}, /poll create {title} {options...}, /announce {message}, /chess {room}, /bot list, /bot info {bot}, /bot ask {bot} {question}, /dice {sides}, /joke, /quote, /8ball {question}, /trivia',
 'sender': 'Server', 'timestamp': datetime.now(cst_timezone).strftime('%Y-%m-%d %I:%M %p'), 'room': room, 'whisper_to': current_user.id}
 
     if command == '/chess' and len(parts) > 1:

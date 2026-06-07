@@ -10,7 +10,8 @@
     ],
     "channels": [
       "general",
-      "voice"
+      "voice",
+      "forum"
     ],
     "channel_metadata": {
       "general": {
@@ -18,6 +19,9 @@
       },
       "voice": {
         "type": "voice"
+      },
+      "forum": {
+        "type": "forum"
       }
     },
     "icon": ""
